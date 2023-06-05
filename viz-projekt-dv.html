@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="http://d3js.org/d3.v3.min.js"></script>
+    <script src="http://d3js.org/topojson.v1.min.js"></script>
+    <meta charset="utf-8"/>
+    <style>
+        .tooltip {
+            display: inline;
+            position: absolute;
+            background: #D3D3D3;
+            border: 1px solid black;
+            border-radius: 4px;
+            font-size: 20px;
+            padding: 4px;
+        }
+
+        .graphValue{
+            display: inline;
+            position: absolute;
+            background: #D3D3D3;
+            border: 1px solid black;
+            border-radius: 4px;
+            font-size: 20px;
+            padding: 4px;
+        }
+
+        text{
+            font-size:20px
+        }
+
+    </style>
+</head>
+
+<body>
+    <h1 style="text-align:center;font-size: 2.5em;">Vizualizacija stanovništva Republike Hrvatske prema starosti i spolu po županijama u 2021. godini</h1>
+    <script>
+
+    var width = 3150; 
+    var height = 700; 
+    var outerRadius = 150;
+    var innerRadius = 0;
+    var populationSvgWidth = 2400;
+
+    var currentCounty;
+
+    //2021 popis - ukupan broj muske i zenske populacije
+    var croatiaPopulationTotalLatestData; //ima ages
+
+    var croatiaMalesTotalLatestData; //ima ages
+    var croatiaFemalesTotalLatestData; //ima ages
+    var croatiaAgeSpanLatestData = [] //TOTAL 2021 HRVATSKA
+    var currentCountyAgeSpanLatestData = [] //TOTAL 2021 TRENUTNA ZUPANIJA
+
+
+    //2011 popis - ukupan broj muske i zenske populacije
+    var lastDataTotal = [];
+    var malesTotalLastData;
+    var femalesTotalLastData;
+   
+        
+    var croatiaAgeSpanLastData = [] //TOTAL 2011 HRVATSKA
+    var currentCountyAgeSpanLastData = [] //TOTAL 2011 TRENUTNA ZUPANIJA
+
+    //2011 popis - broj muske i zenske populacije za odabranu zupaniju
+    var currentCountyLastData;
+    var currentCountyMalesLastData;
+    var currentCountyFemalesLastData;
+
+    //2021 popis - broj muske i zenske populacije za odabranu zupaniju
+    var currentCountyMales;
+    var currentCountyFemales;
+
+    //polje za bar chart population difference
+    var populationBarChartData = []
+
+    var allCounties = []
+    var countiesLatestData = []
+    var countryPopulationByGender = []
+    var countyPopulationByGender = []
+    var totalMaleAndFemaleCountyData = []
+
+    var filteredCurrentCountyLastData = []
+
+    //pie chart za omjer muške/ženske populacije
+    var pie;
+    var arc;
+    var pieArc;
+
+    //pie chart za omjer dobnih granica
+    var agePie;
+    var ageArc;
+    var agePieArcs;
+
+    //podaci za selektiranu zupaniju
+    var selectedCounty;
+
+    //bar chart population difference
+    var y2;
+    var y2Axis;
+
+    //2011 podaci - potrebna polja
+    var lastCountyPopulationDataByGender = []
+    var lastCountiesDataTotal = []
+    var lastDataCroatiaPopulation = []
+    var countiesLastData = [];
+
+    var densityColors = ["#ccf9ff", "#7ce8ff", "#55d0ff", "#00acdf", "#0080bf"]
+
+    var projection = d3.geo.mercator()
+        .center([0, 10])
+        .scale(6000)
+        .translate([17600, 4500])
+        .rotate([-180, 0]);
+        
+    var path = d3.geo.path()
+        .projection(projection);
+        
+    var svg = d3.select("body").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .style("background", "white");
+
+    var populationSvg = d3.select("body").append("svg")
+        .attr("width", 3000)
+        .attr("height", 1500)
+        .style("background", "white");
+
+
+    var lastPopulationDataButton = svg.append("g").attr("id", "lastPopulationDataButton")
+    lastPopulationDataButton.append("rect")
+            .attr("x", 1040)
+            .attr("y", 450)
+            .attr("width", 100)
+            .attr("height", 40)
+            .attr("style","stroke:black;stroke-width:1;fill:lightblue;");
+    lastPopulationDataButton.append("text")
+            .text("2011")
+            .attr("style","pointer-events: none")
+            .attr("x", 1070)
+            .attr("y", 475); 
+
+
+    var latestPopulationData = svg.append("g").attr("id", "latestPopulationDataButton")
+    latestPopulationData.append("rect")
+            .attr("x", 1150)
+            .attr("y", 450)
+            .attr("width", 100)
+            .attr("height", 40)
+            .attr("style","stroke:black;stroke-width:1;fill:lightblue;");
+    latestPopulationData.append("text")
+            .text("2021")
+            .attr("style","pointer-events: none")
+            .attr("x", 1180)
+            .attr("y", 475);
+   
+    var ageSpanColors = d3.scale.category20();
+    var colors = d3.scale.ordinal().range(["#0000FF","#FF0000"]);
+
+    
+    /*---------------------------------UČITAVANJE PODATAKA POPISA STANOVNIŠTVA IZ 2021. GODINE---------------------------------*/
+
+    d3.json("data.json", function(error, countiesData){
+            croatiaPopulationTotalLatestData = countiesData[0];
+            croatiaMalesTotalLatestData = countiesData[1];
+            croatiaFemalesTotalLatestData = countiesData[2];
+           
+            //Dodavanje dobnih granica u polje; Hrvatska 2021. ukupno stanovništvo
+            for (let i = 9; i < 29; i++) {
+                croatiaAgeSpanLatestData.push(parseFloat(Object.values(croatiaPopulationTotalLatestData)[i].replace(/,/g, '')));
+            }
+
+            totalMaleAndFemaleCountyData.push(croatiaMalesTotalLatestData,croatiaFemalesTotalLatestData);
+
+            /*---------------------------------AGE PIE CHART ZA 2021. GODINU UKUPNO---------------------------------*/
+
+            let showAgePieValues = function(d){
+                    tooltip
+                    .style("left", (d3.mouse(this)[0]+2520) + "px")
+                    .style("top", (d3.mouse(this)[1]+370) + "px")
+                    .style("opacity", 1)
+                    .text(d.value);
+             }
+
+             let hideAgePieValues = function(d){
+                    tooltip
+                    .style("opacity", 0)
+                   
+             }
+
+       
+            
+            var agePieLegendValues = ["0 – 4",
+             "5 – 9","10 – 14","15 – 19","20 – 24",
+             "25 – 29","30 – 34","35 – 39","40 – 44",
+             "45 – 49","50 – 54","55 – 59","60 – 64",
+             "65 – 69","70 – 74","75 – 79","80 – 84",
+             "85 – 89","90 – 94","95+"];
+
+            var ageLegendSize = 25;
+            svg.selectAll("legendColors")
+                    .data(agePieLegendValues)
+                    .enter()
+                    .append("rect")
+                    .attr("x", 2880)
+                    .attr("y", function(d,i){ return 60 + i*(ageLegendSize+5) }) 
+                    .attr("width", ageLegendSize)
+                    .attr("height", ageLegendSize)
+                    .style("fill", function(d,i){ return ageSpanColors(i) })
+
+            svg.selectAll("legendLabels")
+                    .data(agePieLegendValues)
+                    .enter()
+                    .append("text")
+                    .attr("x", 2914)
+                    .attr("y", function(d,i){ return 67 + i*(ageLegendSize+5)+(ageLegendSize/2)}) 
+                    .text(function(d){ return d})
+                    .attr("text-anchor", "left")
+                 
+            var agePieChartTitle = svg.append("g")
+            agePieChartTitle.append("text")
+                    .attr("id", "agePieChartTitle")
+                    .text("Raspon dobi stanovnika - Republika Hrvatska")
+                    .attr("x", 2350)
+                    .attr("y", 30)
+                    .attr("style","font-size:20px;")
+
+            ageArc = d3.svg.arc()
+                    .innerRadius(innerRadius)
+                    .outerRadius(300);
+
+            agePie = d3.layout.pie()
+                    .value(function(d) { 
+                        return d});
+    
+            agePieArcs = svg.selectAll("g.agePie")
+                    .data(agePie(croatiaAgeSpanLatestData))
+                    .enter()
+                    .append("g")
+                    .attr("class", "agePie")
+                    .attr("transform", "translate(" + (2550) + ", " + (350) +")");
+                   
+             agePieArcs.append("path")
+                     .attr("fill", function(d, i) { return ageSpanColors(i); })
+                     .attr("d", ageArc)
+                     .on("mouseover", showAgePieValues)
+                     .on("mouseleave",hideAgePieValues)
+
+            /*---------------------------------PIECHART DOBNIH GRANICA ZA 2021. GODINU UKUPNO---------------------------------*/
+
+            allCounties = countiesData.filter(county => county["Jedinica lokalne samouprave"]=="" && county["Naselje\nSettlement "]=="");
+            countiesLatestData = countiesData.filter(county => county["Jedinica lokalne samouprave"]=="" && county["Naselje\nSettlement "]=="" && county["Spol"]=="sv." && county["Županija"]!="Republika Hrvatska");
+            countryPopulationByGender.push(countiesData[1],countiesData[2]);
+            //LATEST BUTTON
+            d3.select("#latestPopulationDataButton")
+                .on("click", function(){
+                    svg.select("#latestPopulationDataButton")
+                        .select("rect")
+                        .attr("style","stroke:black;stroke-width:2;fill:lightblue;")
+
+                    svg.select("#lastPopulationDataButton")
+                        .select("rect")
+                        .attr("style","stroke:black;stroke-width:1;fill:lightblue;")
+                        
+
+                    if(selectedCounty == null){
+                        updateAgePieChart(croatiaAgeSpanLatestData);
+                        lastCountyPopulationDataByGender = []
+                        lastCountyPopulationDataByGender.push(croatiaMalesTotalLatestData, croatiaFemalesTotalLatestData)
+                      
+
+                        pieArcs = svg.selectAll("g.pie")
+                                .data(pie(lastCountyPopulationDataByGender))
+                                .transition().duration(250)
+                                .attr("transform", "translate(" + (1400 / 2 + 450) + ", " + (700 / 2 - 100) +")");
+                              
+                        pieArcs.select("path")
+                                .attr("fill", function(d, i) { return colors(i); })
+                                .attr("d", arc);
+                        }
+
+                        else{
+                            lastCountyPopulationDataByGender = []
+                            lastCountyPopulationDataByGender.push(currentCountyMales,currentCountyFemales);
+                            
+                            updateAgePieChart(currentCountyAgeSpanLatestData);
+
+                            pieArcs = svg.selectAll("g.pie")
+                                    .data(pie(lastCountyPopulationDataByGender))
+                                    .transition().duration(250)
+                                    .attr("transform", "translate(" + (1400 / 2 + 450) + ", " + (700 / 2 - 100) +")");
+                                
+                            pieArcs.select("path")
+                                    .attr("fill", function(d, i) { return colors(i); })
+                                    .attr("d", arc);
+
+                            var latestCountyTotal = pie(lastCountyPopulationDataByGender)[0].value + pie(lastCountyPopulationDataByGender)[1].value 
+                            pieArcs.select("text")
+                                    .attr("transform", function(d){
+                                        return "translate(" + arc.centroid(d) + ")";
+                                    })
+                                    .attr("text-anchor","middle")
+                                    .text(function(d){
+                                        return `${d.data.Sex} {${(d.value/latestCountyTotal * 100).toFixed(2)}%}`;
+                                
+                            });
+                        }
+                    
+
+                });
+
+
+            /*---------------------------------MALE/FEMALE POPULATION PIECHART---------------------------------*/
+
+               
+            arc = d3.svg.arc()
+                    .innerRadius(innerRadius)
+                    .outerRadius(outerRadius);
+
+            pie = d3.layout.pie()
+                            .value(function(d) { return parseFloat(d.Ukupno.replace(/,/g, '.')) });
+            
+            var populationTotal = pie(countryPopulationByGender)[0].value +pie(countryPopulationByGender)[1].value       
+                            
+            pieArcs = svg.selectAll("g.pie")
+                            .data(pie(countryPopulationByGender))
+                            .enter()
+                            .append("g")
+                            .attr("class", "pie")
+                            .attr("transform", "translate(" + (1400 / 2 + 450) + ", " + (700 / 2 - 100) +")");
+                           
+                    
+            pieArcs.append("path")
+                            .attr("fill", function(d, i) { return colors(i); })
+                            .attr("d", arc);
+
+            pieArcs.append("text")
+                        .attr("transform", function(d){
+                            return "translate(" + arc.centroid(d) + ")";
+                        })
+                        .attr("text-anchor","middle")
+                        .text(function(d){
+                            return `${d.data.Sex} {${(d.value/populationTotal * 100).toFixed(2)}%}`;
+                            
+                        });
+
+            //Male/Female pieChart TITLE
+            var pieChartTitle = svg.append("g")
+            pieChartTitle.append("text")
+                    .attr("id", "pieChartTitle")
+                    .text("Omjer M/Ž populacije - Republika Hrvatska")
+                    .attr("x", 960)
+                    .attr("y", 70)
+                    .attr("style","font-size:20px;")
+
+            /*---------------------------------MALE/FEMALE POPULATION PIECHART---------------------------------*/
+         
+
+
+            /*---------------------------------BAR CHART FOR COUNTY POPULATION---------------------------------*/
+
+            var countyPopulationYears = ["2011.", "2021."]
+            var legendSize = 25;
+            populationSvg.selectAll("legendColors")
+                    .data(countyPopulationYears)
+                    .enter()
+                    .append("rect")
+                    .attr("x", function(d,i){ return 420+ i*(legendSize+60)})
+                    .attr("y", function(d,i){ return 980 + i*(legendSize-25) }) 
+                    .attr("width", legendSize)
+                    .attr("height", legendSize)
+                    .style("fill", function(d,i){ 
+                        if(i==1){
+                        return "#3AEDCC"
+                    } else{ 
+                        return "#964B00"
+                       
+                    }})
+
+            populationSvg.selectAll("legendLabels")
+                    .data(countyPopulationYears.reverse())
+                    .enter()
+                    .append("text")
+                    .attr("x", function(d,i){ return 454+ i*(legendSize+60)})
+                    .attr("y", function(d,i){ return 987 + i*(legendSize-25)+(legendSize/2)}) 
+                    .text(function(d){ return d})
+                    .attr("text-anchor", "left")
+
+            var countyPopulationChartTitle = populationSvg.append("g")
+            countyPopulationChartTitle.append("text")
+                    .attr("id", "countyPopulationChartTitle")
+                    .text("Broj stanovnika po županijama Republike Hrvatske u 2011. i 2021. godini")
+                    .attr("x", 820)
+                    .attr("y", 60)
+                    .attr("style","font-size:20px;")
+
+
+            var x = d3.scale.ordinal()
+                .domain(d3.range(countiesLatestData.length)) 
+                .rangeBands([0,populationSvgWidth-500],0.15);
+               
+
+            var y = d3.scale.linear()
+                .domain([0, d3.max(countiesLatestData, c=> parseFloat(c["Ukupno"].replace(',', '')))]) 
+                .range([height, 0]);
+
+         
+            var xAxis = d3.svg.axis()
+                .scale(x)
+                .orient("bottom")
+                .ticks(countiesLatestData.length)
+                .tickFormat((d,i) => countiesLatestData[i].Županija)
+             
+            var yAxis = d3.svg.axis()
+                .scale(y)
+                .orient("left")
+                .ticks(10);
+                
+            populationSvg.append("g")
+                .attr("class", "x axis")
+                .attr("transform", "translate(200," + (900-100) + ")")
+                .call(xAxis)
+                .selectAll("text")
+                .style("text-anchor", "middle")
+                .attr("transform", "translate(20,72), rotate(45)"); 
+            
+            populationSvg.append("g")
+                .attr("class", "y axis")
+                .attr("transform", "translate(200," + (900-800) + ")")
+                .call(yAxis)
+                .append("text")
+                .attr("transform", "translate(25,-40), rotate(0)")
+                .attr("y", 16)
+                .attr("dy", ".95em")
+                .style("text-anchor", "end")
+                .text("Broj stanovnika");
+
+             var barchart = populationSvg.selectAll("rect.newData")
+                    .data(countiesLatestData)
+                    .enter()
+                    .append("rect")
+                    .attr("x", function(d, i) { return x(i)+195; })
+                    .attr("y", function(d) { return y(parseFloat(d["Ukupno"].replace(',', '')))+100; })
+                    .attr("width", 20)
+                    .attr("height", function(d) { 
+                        return height-y(parseFloat(d["Ukupno"].replace(',', ''))); })
+                    .attr("fill", "#964B00");
+
+            var barchart = populationSvg.selectAll("rect.oldData")
+                    .data(countiesLastData)
+                    .enter()
+                    .append("rect")
+                    .attr("x", function(d, i) { return x(i)+215; })
+                    .attr("y", function(d) { return y(parseFloat(d["Ukupno"].replace(',', '')))+100; })
+                    .attr("width", 20)
+                    .attr("height", function(d) { 
+                        return height-y(parseFloat(d["Ukupno"].replace(',', ''))); })
+                    .attr("fill", "#3AEDCC");
+            /*---------------------------------BAR CHART FOR COUNTY POPULATION---------------------------------*/
+
+
+            /*---------------------------------BAR CHART FOR POPULATION DIFFERENCE---------------------------------*/
+            var countyPopulationDifferenceChartTitle = svg.append("g")
+            countyPopulationDifferenceChartTitle.append("text")
+                    .attr("id", "countyPopulationDifferenceChartTitle")
+                    .text("Graf razlike M/Ž populacije izmedju 2011. i 2021. godine")
+                    .attr("x", 1600)
+                    .attr("y", 30)
+                    .attr("style","font-size:20px;")
+
+            var lastYearTitle = svg.append("g")
+            lastYearTitle.append("text")
+                    .attr("id", "lastYearTitle")
+                    .text("2021.")
+                    .attr("x", 1600)
+                    .attr("y", 680)
+                    .attr("style","font-size:20px;")
+
+
+            var latestYearTitle = svg.append("g")
+            latestYearTitle.append("text")
+                    .attr("id", "latestYearTitle")
+                    .text("2011.")
+                    .attr("x", 1960)
+                    .attr("y", 680)
+                    .attr("style","font-size:20px;")
+
+            malesTotalLastData = {Ukupno: lastDataCroatiaPopulation.Muskarci, Sex : "M"}
+            femalesTotalLastData = {Ukupno: lastDataCroatiaPopulation.Zene, Sex : "W"}
+            totalMaleAndFemaleCountyData.push(malesTotalLastData,femalesTotalLastData);
+            var x2 = d3.scale.ordinal()
+                .domain(d3.range(totalMaleAndFemaleCountyData.length)) 
+                .rangeBands([0,600],-0.6);
+          
+            
+            y2 = d3.scale.linear()
+                .domain([0, d3.max(totalMaleAndFemaleCountyData, c=> parseFloat(c["Ukupno"].replace(/,/g, '')))]) 
+                .range([600, 0]);
+    
+
+            var x2Axis = d3.svg.axis()
+                .scale(x2)
+                .orient("bottom")
+                .ticks(totalMaleAndFemaleCountyData.length)
+                .tickFormat((d,i) => totalMaleAndFemaleCountyData[i].Sex)
+             
+            y2Axis = d3.svg.axis()
+                .scale(y2)
+                .orient("left")
+                .ticks(10);
+                
+            svg.append("g")
+                .attr("class", "x2-axis")
+                .attr("transform", "translate(1500," + 650 + ")")
+                .call(x2Axis)
+                .selectAll("text")
+                .style("text-anchor", "middle")
+                .attr("transform", "translate(10,10), rotate(45)"); 
+            
+            svg.append("g")
+                .attr("class", "y2-axis")
+                .attr("transform", "translate(1500," + 50 + ")")
+                .call(y2Axis)
+                .append("text")
+                .attr("transform", "translate(40,-50), rotate(0)")
+                .attr("y", 16)
+                .attr("dy", ".95em")
+                .style("text-anchor", "end")
+                .text("Broj stanovnika");
+            
+         
+            var populationDifferenceBarChart = svg.selectAll("rect.chart")
+                    .data(totalMaleAndFemaleCountyData)
+                    .enter()
+                    .append("rect")
+                    .attr("class", "chart")
+                    .attr("x", function(d, i) { 
+                        return x2(i)+1620; })
+                    .attr("y", function(d) {
+                        return y2(parseFloat(d["Ukupno"].replace(/,/g, '')))+50 })
+                    .attr("width", 60)
+                    .attr("height", function(d) { 
+                        return 600-y2(parseFloat(d["Ukupno"].replace(/,/g, ''))); })
+                    .attr("fill", function(d){
+                        if(d.Sex == "M"){
+                            return "#0000FF"
+                        }
+                        else
+                         return "#FF0000"
+                    });
+
+            /*---------------------------------BAR CHART FOR POPULATION DIFFERENCE---------------------------------*/
+                        
+            var legendValues = ["40,000-192,000", "192,000-344,000","344,000-496,000","496,000-648,000","648,000-800,000"];
+
+            /*---------------------------------SHOW COUNTRY DENSITY BY COUNTIES---------------------------------*/
+             var populationScale = d3.scale.linear()
+                .domain([40000, 800000])
+                .range([0, 4]);
+        
+            var states = svg.selectAll("path.county")
+                        .style("fill", function (d)	{   
+                                currentCounty = countiesLatestData.find(county => county["Županija"]==d.properties.name)
+                                var value = Math.round(populationScale(parseFloat(currentCounty["Ukupno"].replace(',', ''))));
+                                
+                                return densityColors[value]; 
+                        })
+            
+            var legendMapTitle = svg.append("g")
+            legendMapTitle.append("text")
+                    .attr("id", "legendMapTitle")
+                    .text("Raspon broja stanovnika županije")
+                    .attr("x", 570)
+                    .attr("y", 340)
+                    .attr("style","font-size:20px;")
+
+            var legendSize = 25;
+            svg.selectAll("legendColors")
+                    .data(legendValues)
+                    .enter()
+                    .append("rect")
+                    .attr("x", 620)
+                    .attr("y", function(d,i){ return 350 + i*(legendSize+5) }) 
+                    .attr("width", legendSize)
+                    .attr("height", legendSize)
+                    .style("fill", function(d,i){ return densityColors[i] })
+
+            svg.selectAll("legendLabels")
+                    .data(legendValues)
+                    .enter()
+                    .append("text")
+                    .attr("x", 654)
+                    .attr("y", function(d,i){ return 357 + i*(legendSize+5)+(legendSize/2)}) 
+                    .text(function(d){ return d})
+                    .attr("text-anchor", "left")
+            /*---------------------------------SHOW COUNTRY DENSITY BY COUNTIES---------------------------------*/
+
+        
+    });
+
+
+
+    
+
+    const tooltip = d3.select("body").append("div")
+        .attr("class", "tooltip")
+        .style("opacity", 0);
+
+    const graphValue = d3.select("body").append("div")
+        .attr("class", "graphValue")
+        .style("opacity", 0);
+
+
+    /*---------------------------------UČITAVANJE PODATAKA POPISA STANOVNIŠTVA IZ 2011. GODINE---------------------------------*/
+
+    d3.json("data_2011.json", function(error, data){
+            lastDataTotal = data;
+
+            lastDataCroatiaPopulation = data[0];
+            var agesTotal = 0;
+            var counter = 0;
+
+            for (let i = 1; i <= 95; i++) {
+                agesTotal+=parseInt(data[i].Ukupno);
+                counter++;
+                if(counter==5){
+                    croatiaAgeSpanLastData.push(agesTotal);
+                    agesTotal=0;
+                    counter=0;
+                }
+            }
+
+            for (let i = 96; i < 112; i++) {
+                agesTotal+=parseInt(data[i].Ukupno);
+            }
+            croatiaAgeSpanLastData.push(agesTotal);
+            agesTotal=0;
+           
+            lastCountiesDataTotal = data.filter(county => county["Starost"]==""); 
+            countiesLastData = data.filter(county => county["Starost"]=="" && county["Zupanija"]!="Republika Hrvatska");
+           
+           
+        /*----------------------TIPKA ZA UCITAVANJE PODATAKA OMJERA MUŠKE/ŽENSKE POPULACIJE U PIE CHART----------------------*/
+
+        //LAST BUTTON
+        d3.select("#lastPopulationDataButton")
+                .on("click", function(){
+
+                    svg.select("#latestPopulationDataButton")
+                        .select("rect")
+                        .attr("style","stroke:black;stroke-width:1;fill:lightblue;")
+
+                    svg.select("#lastPopulationDataButton")
+                        .select("rect")
+                        .attr("style","stroke:black;stroke-width:2;fill:lightblue;")
+
+                    if(selectedCounty == null){
+                        lastCountyPopulationDataByGender = []
+                        lastCountyPopulationDataByGender.push(malesTotalLastData, femalesTotalLastData)
+                        updateAgePieChart(croatiaAgeSpanLastData);
+
+                        pieArcs = svg.selectAll("g.pie")
+                                .data(pie(lastCountyPopulationDataByGender))
+                                .transition().duration(250)
+                                .attr("transform", "translate(" + (1400 / 2 + 450) + ", " + (700 / 2 - 100) +")");
+            
+                        
+                        pieArcs.select("path")
+                                .attr("fill", function(d, i) { return colors(i); })
+                                .attr("d", arc);
+
+                    
+                        }
+                        else{
+                            lastCountyPopulationDataByGender = []
+                            lastCountyPopulationDataByGender.push(currentCountyMalesLastData, currentCountyFemalesLastData)
+                            filteredCurrentCountyLastData = []
+                            currentCountyAgeSpanLastData = []
+                            filteredCurrentCountyLastData = lastDataTotal.filter(county => county["Zupanija"]==selectedCounty && county["Starost"]!="")
+                            var agesTotal = 0;
+                            var counter = 0;
+                            for (let i = 0; i <= 94; i++) {
+                                agesTotal+=parseInt(filteredCurrentCountyLastData[i].Ukupno);
+                                counter++;
+                                if(counter==5){
+                                    currentCountyAgeSpanLastData.push(agesTotal);
+                                    agesTotal=0;
+                                    counter=0;
+                                }
+                            }
+                            for (let i = 95; i < 111; i++) {
+                                agesTotal+=parseInt(filteredCurrentCountyLastData[i].Ukupno);
+                            }
+                            currentCountyAgeSpanLastData.push(agesTotal);
+                            agesTotal=0;
+                            updateAgePieChart(currentCountyAgeSpanLastData)
+
+                            pieArcs = svg.selectAll("g.pie")
+                                    .data(pie(lastCountyPopulationDataByGender))
+                                    .transition().duration(250)
+                                    .attr("transform", "translate(" + (1400 / 2 + 450) + ", " + (700 / 2 - 100) +")");
+                             
+                            pieArcs.select("path")
+                                    .attr("fill", function(d, i) { return colors(i); })
+                                    .attr("d", arc);
+
+                            var lastCountyTotal = pie(lastCountyPopulationDataByGender)[0].value + pie(lastCountyPopulationDataByGender)[1].value 
+                            pieArcs.select("text")
+                                    .attr("transform", function(d){
+                                        return "translate(" + arc.centroid(d) + ")";
+                                    })
+                                    .attr("text-anchor","middle")
+                                    .text(function(d){
+                                        return `${d.data.Sex} {${(d.value/lastCountyTotal * 100).toFixed(2)}%}`;
+                                
+                            });
+                        }
+
+                });
+
+
+        /*----------------------TIPKA ZA UCITAVANJE PODATAKA OMJERA MUŠKE/ŽENSKE POPULACIJE U PIE CHART----------------------*/
+
+
+    });
+
+
+
+
+
+    /*---------------------------------UČITAVANJE PODATAKA KORDINATA ŽUPANIJE ZA MAPU---------------------------------*/
+
+    d3.json("cro.json", function(error, cro) {
+    
+    var prevCountyId = "DN"
+    var currentCountyId = 0
+
+    let mouseOver = function(d){
+        if(currentCountyId!=d.id){
+            prevCountyId=currentCountyId;
+            currentCountyId = d.id;
+            d3.select(this).style("stroke-width", 5);
+            tooltip
+            .style("left", (d3.mouse(this)[0]+20) + "px")
+            .style("top", (d3.mouse(this)[1]-40) + "px")
+            .style("opacity", 1)
+            .text(d.properties.name);
+        }
+
+        if(prevCountyId!=0){
+            d3.select("path#"+prevCountyId+".county").style("stroke-width", 2);
+        }
+      
+    }
+
+    let mouseLeave = function(d) {
+        d3.select("path#"+currentCountyId+".county").style("stroke-width", 2);
+		tooltip
+			.style("opacity", 0);
+        currentCountyId = 0;
+         
+	}
+
+
+    var data = topojson.feature(cro, cro.objects.layer1);
+
+    var states = svg.selectAll("path.county")
+            .data(data.features)
+            .enter()
+            .append("path")
+            .attr("class", "county")
+            .attr("id", function(d) { return d.id; })
+            .attr("d", path) .style("fill", "white")
+            .style("stroke", "black")
+            .style("stroke-width", 2)
+            .style("stroke-opacity", 1)
+            .on("mouseover", mouseOver)
+            .on("mouseleave", mouseLeave)
+            .on("click", function(d,i){
+                svg.select("#latestPopulationDataButton")
+                        .select("rect")
+                        .attr("style","stroke:black;stroke-width:2;fill:lightblue;")
+
+                 svg.select("#lastPopulationDataButton")
+                        .select("rect")
+                        .attr("style","stroke:black;stroke-width:1;fill:lightblue;")
+
+                currentCounty = allCounties.find(county => county["Županija"]==d.properties.name)
+                currentCountyMales = allCounties.find(county => county["Županija"]==d.properties.name && county["Naselje\nSettlement "]==""  && county["Naselje\nSettlement "]=="" && county["Spol"]=="m")
+                currentCountyFemales = allCounties.find(county => county["Županija"]==d.properties.name && county["Naselje\nSettlement "]==""  && county["Naselje\nSettlement "]=="" && county["Spol"]=="ž")
+
+                countyPopulationByGender = []
+                countyPopulationByGender.push(currentCountyMales, currentCountyFemales)
+                selectedCounty = d.properties.name;
+              
+                currentCountyLastData = lastCountiesDataTotal.find(county => county["Zupanija"]==selectedCounty)
+                
+                currentCountyMalesLastData = {Ukupno: currentCountyLastData.Muskarci, Sex : "M"}
+                currentCountyFemalesLastData =  {Ukupno: currentCountyLastData.Zene, Sex : "W"}
+              
+                populationBarChartData = []
+                populationBarChartData.push(currentCountyMales,currentCountyFemales,currentCountyMalesLastData,currentCountyFemalesLastData);
+                updateBarChart(populationBarChartData)
+
+                currentCountyAgeSpanLatestData = []
+                 for (let i = 9; i < 29; i++) {
+                     currentCountyAgeSpanLatestData.push(parseFloat(Object.values(currentCounty)[i].replace(/,/g, '')));
+                }
+                updateAgePieChart(currentCountyAgeSpanLatestData)
+
+            /*---------------------CHANGE PIE CHART OF M/F POPULATION BY CLICKING ON EACH COUNTIES---------------------*/
+            pieArcs = svg.selectAll("g.pie")
+                            .data(pie(countyPopulationByGender))
+                            .transition().duration(250)
+                            .attr("transform", "translate(" + (1400 / 2 + 450) + ", " + (700 / 2 - 100) +")");
+           
+            var countyPopulationTotal = pie(countyPopulationByGender)[0].value +pie(countyPopulationByGender)[1].value 
+            pieArcs.select("path")
+                            .attr("fill", function(d, i) { return colors(i); })
+                            .attr("d", arc);
+                            
+
+            pieArcs.select("text")
+                        .attr("transform", function(d){
+                            return "translate(" + arc.centroid(d) + ")";
+                        })
+                        .attr("text-anchor","middle")
+                        .text(function(d){
+                            return `${d.data.Sex} {${(d.value/countyPopulationTotal * 100).toFixed(2)}%}`;
+                        });
+                       
+            svg.select("#pieChartTitle")
+                    .text(function(d){
+                        return "Omjer M/Ž populacije - " + currentCounty.Županija + " županija"
+                    });
+
+                    
+
+            svg.select("#agePieChartTitle")
+                    .text(function(d){
+                        return "Raspon dobi stanovnika - " + currentCounty.Županija + " županija"
+                    });
+
+
+            /*---------------------CHANGE PIE CHART OF M/F POPULATION BY CLICKING ON EACH COUNTIES---------------------*/
+            
+          
+            })
+
+
+        });
+
+
+        function updateBarChart(newData){
+            
+            var maxValue = d3.max(newData, c=> parseFloat(c["Ukupno"].replace(/,/g, '')))*1.05
+
+            y2 = d3.scale.linear()
+                .domain([0, maxValue]) 
+                .range([600, 0]);
+
+            y2Axis = d3.svg.axis()
+                .scale(y2)
+                .orient("left")
+                .ticks(10);
+
+            svg.select(".y2-axis")
+                .text("")
+                .call(y2Axis)
+                .append("text")
+                .attr("transform", "translate(40,-50), rotate(0)")
+                .attr("y", 16)
+                .attr("dy", ".95em")
+                .style("text-anchor", "end")
+                .text("Broj stanovnika");
+
+            populationDifferenceBarChart = svg.selectAll("rect.chart")
+                    .data(newData)
+                    .transition().duration(1000)
+                    .attr("y", function(d) {
+                        return y2(parseFloat(d["Ukupno"].replace(/,/g, '')))+50 })
+                    .attr("height", function(d) { 
+                        return 600-y2(parseFloat(d["Ukupno"].replace(/,/g, ''))); })
+        }   
+
+
+        function updateAgePieChart(newData){
+
+            agePieArcs = svg.selectAll("g.agePie")
+                            .data(agePie(newData))
+                            .transition().duration(250)
+                            .attr("transform", "translate(" + (2550) + ", " + (350) +")");
+           
+            agePieArcs.select("path")
+                            .attr("fill", function(d, i) { return ageSpanColors(i); })
+                            .attr("d", ageArc);
+                            
+        }
+    
+    </script>
+</body>
+
+</html>
